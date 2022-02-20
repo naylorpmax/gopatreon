@@ -5,33 +5,35 @@ Lightweight package to expose Patreon API via gopkg.in/mxpv/patreon-go.v1.
 ## Examples
 
 ```golang
+package example
+
 import (
 	"github.com/gorilla/mux"
-    "github.com/naylorpmax/gopatreon"
+	"github.com/naylorpmax/gopatreon"
 )
 
-type Callback struct{
-    OAuth2Config *oauth2.Config
+type Callback struct {
+	OAuth2Config *oauth2.Config
 }
 
 func (c *Callback) Handler(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		code := r.FormValue("code")
 		if code == "" {
-            panic(err)
+			panic(err)
 		}
 
 		client, err := gopatreon.NewClient(r.Context(), code, c.OAuth2Config)
 		if err != nil {
-            panic(err)
+			panic(err)
 		}
 
-        service := gopatreon.NewService(client)
+		service := gopatreon.NewService(client)
 
 		userName, err := service.AuthenticateUser()
 		if err != nil {
-            panic(err)
-        }
+			panic(err)
+		}
 
 		welcomeMsg := map[string]string{
 			"message": "welcome! you're logged in",
@@ -41,15 +43,15 @@ func (c *Callback) Handler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		err = json.NewEncoder(w).Encode(welcomeMsg)
-        if err != nil {
-            panic(err)
-        }
+		if err != nil {
+			panic(err)
+		}
 	}()
 }
 
 type Authorize struct {
-    OAuth2Config *oauth2.Config
-)
+	OAuth2Config *oauth2.Config
+}
 
 func (a *Authorize) Handler(w http.ResponseWriter, r *http.Request) {
 	go func() {
@@ -59,9 +61,9 @@ func (a *Authorize) Handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-    router := mux.NewRouter().StrictSlash(true)
+	router := mux.NewRouter().StrictSlash(true)
 
-    authorize := &Authorize{OAuth2Config: cfg.OAuth2Config}
+	authorize := &Authorize{OAuth2Config: cfg.OAuth2Config}
 	router.Methods("GET").
 		Path("/authorize").
 		Handler(authorize.Handler)
@@ -71,11 +73,11 @@ func main() {
 		Path("/callback").
 		Handler(callback.Handler)
 
-    server := http.Server{
+	server := http.Server{
 		Addr:    "localhost:8080",
 		Handler: router,
 	}
 
-    panic(server.ListenAndServe())
+	panic(server.ListenAndServe())
 }
 ```
