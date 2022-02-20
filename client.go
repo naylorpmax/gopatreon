@@ -14,6 +14,15 @@ type (
 		FetchPledges(string) ([]*Pledge, error)
 	}
 
+	standardClient struct {
+		client mxpvClientWrapper
+	}
+
+	mxpvClientWrapper interface {
+		FetchUser() (*mxpv.UserResponse, error)
+		FetchPledges(string) (*mxpv.PledgeResponse, error)
+	}
+
 	mxpvClient struct {
 		client *mxpv.Client
 	}
@@ -46,12 +55,12 @@ func New(ctx context.Context, code string, oauth2Config *oauth2.Config) (Client,
 
 	client := oauth2Config.Client(ctx, tok)
 
-	return &mxpvClient{
-		client: mxpv.NewClient(client),
+	return &standardClient{
+		client: &mxpvClient{mxpv.NewClient(client)},
 	}, nil
 }
 
-func (c *mxpvClient) FetchUser() (*User, error) {
+func (c *standardClient) FetchUser() (*User, error) {
 	user, err := c.client.FetchUser()
 	if err != nil {
 		return nil, err
@@ -68,7 +77,7 @@ func (c *mxpvClient) FetchUser() (*User, error) {
 	}, nil
 }
 
-func (c *mxpvClient) FetchPledges(campaignID string) ([]*Pledge, error) {
+func (c *standardClient) FetchPledges(campaignID string) ([]*Pledge, error) {
 	pledgesResp, err := c.client.FetchPledges(campaignID)
 	if err != nil {
 		return nil, err
@@ -86,4 +95,12 @@ func (c *mxpvClient) FetchPledges(campaignID string) ([]*Pledge, error) {
 		pledges = append(pledges, pledge)
 	}
 	return pledges, nil
+}
+
+func (m *mxpvClient) FetchPledges(campaignID string) (*mxpv.PledgeResponse, error) {
+	return m.client.FetchPledges(campaignID)
+}
+
+func (m *mxpvClient) FetchUser() (*mxpv.UserResponse, error) {
+	return m.client.FetchUser()
 }

@@ -1,12 +1,16 @@
 package gopatreon
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestPatreon_AuthenticateUser(t *testing.T) {
+	isPaused := true
+	isPausedAlt := false
+
 	type (
 		in struct {
 			fetchUser    func() (*User, error)
@@ -23,11 +27,28 @@ func TestPatreon_AuthenticateUser(t *testing.T) {
 		expected exp
 	}{
 		{
+			name: "happy-creator",
+			input: in{
+				fetchUser: func() (*User, error) {
+					return &User{
+						ID: CreatorUserID,
+						Attributes: Attributes{
+							FirstName: "max",
+							LastName:  "naylor",
+						},
+					}, nil
+				},
+			},
+			expected: exp{
+				fullName: "max naylor",
+			},
+		},
+		{
 			name: "happy-patron",
 			input: in{
 				fetchUser: func() (*User, error) {
 					return &User{
-						ID: "123456",
+						ID: "not-creator-id",
 						Attributes: Attributes{
 							FirstName:   "max",
 							LastName:    "naylor",
@@ -51,6 +72,185 @@ func TestPatreon_AuthenticateUser(t *testing.T) {
 			expected: exp{
 				fullName: "max naylor",
 				err:      nil,
+			},
+		},
+		{
+			name: "sad-patron-unable-to-fetch-user",
+			input: in{
+				fetchUser: func() (*User, error) {
+					return nil, errors.New("oh no!")
+				},
+			},
+			expected: exp{
+				err: errors.New("unable to fetch user: oh no!"),
+			},
+		},
+		{
+			name: "sad-patron-unable-to-fetch-pledges",
+			input: in{
+				fetchUser: func() (*User, error) {
+					return &User{
+						ID: "not-creator-id",
+					}, nil
+				},
+				fetchPledges: func(campaignID string) ([]*Pledge, error) {
+					return nil, errors.New("oh no!")
+				},
+			},
+			expected: exp{
+				err: errors.New("unable to fetch user's pledges: oh no!"),
+			},
+		},
+		{
+			name: "sad-patron-not-enough-dough",
+			input: in{
+				fetchUser: func() (*User, error) {
+					return &User{
+						ID: "not-creator-id",
+						Attributes: Attributes{
+							IsSuspended: false,
+							IsDeleted:   false,
+							IsNuked:     false,
+						},
+					}, nil
+				},
+				fetchPledges: func(campaignID string) ([]*Pledge, error) {
+					return []*Pledge{
+						{
+							AmountCents:    MinUserAmountCents/2 - 1,
+							PatronPaysFees: true,
+						},
+						{
+							AmountCents:    MinUserAmountCents/2 - 1,
+							PatronPaysFees: true,
+						},
+					}, nil
+				},
+			},
+			expected: exp{
+				err: errors.New("patron level not high enough to access content"),
+			},
+		},
+		{
+			name: "sad-patron-suspended",
+			input: in{
+				fetchUser: func() (*User, error) {
+					return &User{
+						ID: "not-creator-id",
+						Attributes: Attributes{
+							IsSuspended: true,
+							IsDeleted:   false,
+							IsNuked:     false,
+						},
+					}, nil
+				},
+				fetchPledges: func(campaignID string) ([]*Pledge, error) {
+					return []*Pledge{
+						{
+							AmountCents:    MinUserAmountCents,
+							PatronPaysFees: true,
+						},
+						{
+							AmountCents:    MinUserAmountCents,
+							PatronPaysFees: true,
+						},
+					}, nil
+				},
+			},
+			expected: exp{
+				err: errors.New("user is not in good standing with this campaign: user is suspended"),
+			},
+		},
+		{
+			name: "sad-patron-deleted",
+			input: in{
+				fetchUser: func() (*User, error) {
+					return &User{
+						ID: "not-creator-id",
+						Attributes: Attributes{
+							IsSuspended: false,
+							IsDeleted:   true,
+							IsNuked:     false,
+						},
+					}, nil
+				},
+				fetchPledges: func(campaignID string) ([]*Pledge, error) {
+					return []*Pledge{
+						{
+							AmountCents:    MinUserAmountCents,
+							PatronPaysFees: true,
+						},
+						{
+							AmountCents:    MinUserAmountCents,
+							PatronPaysFees: true,
+						},
+					}, nil
+				},
+			},
+			expected: exp{
+				err: errors.New("user is not in good standing with this campaign: user is deleted"),
+			},
+		},
+		{
+			name: "sad-patron-nuked",
+			input: in{
+				fetchUser: func() (*User, error) {
+					return &User{
+						ID: "not-creator-id",
+						Attributes: Attributes{
+							IsSuspended: false,
+							IsDeleted:   false,
+							IsNuked:     true,
+						},
+					}, nil
+				},
+				fetchPledges: func(campaignID string) ([]*Pledge, error) {
+					return []*Pledge{
+						{
+							AmountCents:    MinUserAmountCents,
+							PatronPaysFees: true,
+						},
+						{
+							AmountCents:    MinUserAmountCents,
+							PatronPaysFees: true,
+						},
+					}, nil
+				},
+			},
+			expected: exp{
+				err: errors.New("user is not in good standing with this campaign: user is nuked"),
+			},
+		},
+		{
+			name: "sad-patron-paused",
+			input: in{
+				fetchUser: func() (*User, error) {
+					return &User{
+						ID: "not-creator-id",
+						Attributes: Attributes{
+							IsSuspended: false,
+							IsDeleted:   false,
+							IsNuked:     false,
+						},
+					}, nil
+				},
+				fetchPledges: func(campaignID string) ([]*Pledge, error) {
+					return []*Pledge{
+						{
+							AmountCents:    MinUserAmountCents,
+							PatronPaysFees: true,
+							IsPaused:       &isPausedAlt,
+						},
+						{
+							AmountCents:    MinUserAmountCents,
+							PatronPaysFees: true,
+							IsPaused:       &isPaused,
+						},
+					}, nil
+				},
+			},
+			expected: exp{
+				err: errors.New("user is not in good standing with this campaign: user is paused"),
 			},
 		},
 	}
